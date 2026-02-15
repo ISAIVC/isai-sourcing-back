@@ -54,7 +54,7 @@ SELECT
   bcv.primary_industry_served_by,
   bcv.all_industries_served_sorted AS all_industries_served,
   bcv.business_mapping,
-  bcv.all_tech_tags AS tech_tags,
+  bcv.tech_tags_dynamic AS tech_tags,
 
   -- Scores
   bcv.solution_fit_cg,
