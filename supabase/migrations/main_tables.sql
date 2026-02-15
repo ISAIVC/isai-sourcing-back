@@ -364,7 +364,7 @@ CREATE TABLE IF NOT EXISTS public.business_computed_values (
   last_vc_round_date DATE, -- Latest institutional VC round date cross CB and Tracxn
   last_vc_round_amount NUMERIC, -- Amount of the latest institutional VC round, in millions USD cross CB and Tracxn
   all_investors TEXT[], -- All investors of the company cross CB and Tracxn
-  last_round_lead_investors TEXT, -- Lead investor(s) of the most recent round cross CB and Tracxn
+  last_round_lead_investors TEXT[], -- Lead investor(s) of the most recent round cross CB and Tracxn
   total_number_of_funding_rounds INTEGER, -- Total number of funding rounds, max of (sum of CB vs sum of Tracxn)
 
   -------LLM BASED CLASSIFICATIONS-------
