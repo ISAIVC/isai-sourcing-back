@@ -355,6 +355,8 @@ CREATE TABLE IF NOT EXISTS public.business_computed_values (
   competitors_by TEXT[], -- Bouygues competitors that are partners or clients of this company using fuzzy matching
   platforms_cg TEXT[], -- Capgemini platforms that are partners or clients of this company using fuzzy matching
   platforms_by TEXT[], -- Bouygues platforms that are partners or clients of this company using fuzzy matching
+  affiliates_cg TEXT[], -- Capgemini affiliates that are partners or clients of this company using fuzzy matching
+  affiliates_by TEXT[], -- Bouygues affiliates that are partners or clients of this company using fuzzy matching
 
   -------DB CALCULATED VALUES-------
   -- Funding round computed fields (derived from funding_rounds table)

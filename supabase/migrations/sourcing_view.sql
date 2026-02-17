@@ -26,6 +26,8 @@ SELECT
   bcv.platforms_by AS by_key_platforms,
   bcv.competitors_cg,
   bcv.competitors_by,
+  bcv.affiliates_cg,
+  bcv.affiliates_by,
 
   -- GTM
   bcv.gtm_target AS gtm_target_cg,
