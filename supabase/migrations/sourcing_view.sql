@@ -56,15 +56,15 @@ SELECT
   bcv.business_mapping,
   bcv.tech_tags_dynamic AS tech_tags,
 
-  -- Scores
-  bcv.solution_fit_cg,
-  bcv.solution_fit_by,
-  bcv.business_fit_cg,
-  bcv.business_fit_by,
-  bcv.maturity_fit,
-  bcv.equity_score,
-  bcv.traction_score,
-  bcv.global_fund_score,
+  -- Scores (manual overrides from companies table take precedence)
+  COALESCE(c.solution_fit_cg_manual, bcv.solution_fit_cg) AS solution_fit_cg,
+  COALESCE(c.solution_fit_by_manual, bcv.solution_fit_by) AS solution_fit_by,
+  COALESCE(c.business_fit_cg_manual, bcv.business_fit_cg) AS business_fit_cg,
+  COALESCE(c.business_fit_by_manual, bcv.business_fit_by) AS business_fit_by,
+  COALESCE(c.maturity_fit_manual, bcv.maturity_fit) AS maturity_fit,
+  COALESCE(c.equity_score_manual, bcv.equity_score) AS equity_score,
+  COALESCE(c.traction_score_manual, bcv.traction_score) AS traction_score,
+  COALESCE(c.global_fund_score_manual, bcv.global_fund_score) AS global_fund_score,
 
   -- Attio
   bcv.in_attio AS present_in_attio,
