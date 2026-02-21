@@ -107,6 +107,7 @@ interface SearchParseResult {
   date_filters: DateFilter[];
   bool_filters: BoolFilter[];
   semantic_query: string | null;
+  limit?: number;
   reasoning: string;
 }
 
@@ -319,6 +320,13 @@ const RESPONSE_SCHEMA = {
         required: ["col", "val"],
       },
     },
+    limit: {
+      type: "INTEGER",
+      description:
+        "Maximum number of results to return. Extract from the query if the user specifies a count (e.g. 'show me 50 companies', 'top 20'). Must be between 10 and 1000. Default to 1000 if the user does not specify a count.",
+      minimum: 10,
+      maximum: 1000,
+    },
     semantic_query: {
       type: "STRING",
       nullable: true,
@@ -423,6 +431,7 @@ containing two things:
   - Use \`not_null\` / \`not_empty\` to express "has a value" constraints.
   - ALL filters are combined with AND.
   - Values for tag and multitag columns MUST come from the lists provided below.
+  - Set \`limit\` to the count explicitly mentioned by the user (e.g. "top 50", "show 20"); clamp to the range [10, 1000]. Default to 1000 if no count is mentioned.
 
 **Semantic Search Guidance:**
   The embedded documents are each company's: description, detailed solution, and
@@ -586,6 +595,8 @@ Deno.serve(async (req: Request) => {
       systemPrompt,
       query.trim(),
     );
+
+    result.limit = result.limit ?? 1000;
 
     return jsonResponse({ success: true, result });
   } catch (error) {
