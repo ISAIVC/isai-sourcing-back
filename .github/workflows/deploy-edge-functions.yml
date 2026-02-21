@@ -34,3 +34,6 @@ jobs:
 
       - name: Deploy run-prefect-pipeline function
         run: supabase functions deploy run-prefect-pipeline --no-verify-jwt --project-ref $PROJECT_ID
+
+      - name: Deploy parse-free-text-query function
+        run: supabase functions deploy parse-free-text-query --no-verify-jwt --project-ref $PROJECT_ID
