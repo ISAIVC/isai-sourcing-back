@@ -86,3 +86,168 @@ LEFT JOIN LATERAL (
 -- Grant access to authenticated users (matches policy pattern on underlying tables)
 GRANT SELECT ON public.sourcing_view TO authenticated;
 REVOKE ALL ON public.sourcing_view FROM anon;
+
+-- sourcing_view column descriptions
+
+-- Fund scope
+COMMENT ON COLUMN public.sourcing_view.fund_prime_scope IS
+  'Fund scope for this company. "CG" for Capgemini only, "BY" for Bouygues only, "BOTH" for both funds. Determined solely by the sectors and industries served. Source: business_computed_values.scope.';
+
+-- Company basics
+COMMENT ON COLUMN public.sourcing_view.logo IS
+  'URL pointing to the company logo image.';
+
+COMMENT ON COLUMN public.sourcing_view.name IS
+  'Official company name.';
+
+COMMENT ON COLUMN public.sourcing_view.website IS
+  'Main company domain name.';
+
+COMMENT ON COLUMN public.sourcing_view.hq_country IS
+  'Country where the company headquarters is located.';
+
+COMMENT ON COLUMN public.sourcing_view.hq_city IS
+  'City where the company headquarters is located.';
+
+COMMENT ON COLUMN public.sourcing_view.inc_date IS
+  'Year the company was founded (YYYY format, stored as integer).';
+
+-- Web scraping (latest entry per domain)
+COMMENT ON COLUMN public.sourcing_view.description IS
+  'General description of the company and what it does, extracted from the most recent website scrape.';
+
+COMMENT ON COLUMN public.sourcing_view.detailed_solution IS
+  'Detailed explanation of the company product or solution offering, extracted from the most recent website scrape.';
+
+COMMENT ON COLUMN public.sourcing_view.use_cases IS
+  'Target use cases or problem scenarios the company addresses, extracted from the most recent website scrape.';
+
+COMMENT ON COLUMN public.sourcing_view.clients_served IS
+  'Notable clients or customers mentioned on the website, extracted from the most recent website scrape.';
+
+COMMENT ON COLUMN public.sourcing_view.number_of_clients_identified IS
+  'Number of clients identified or claimed on the website, extracted from the most recent website scrape.';
+
+-- Business computed - clients/partners
+COMMENT ON COLUMN public.sourcing_view.global_2000_clients IS
+  'List of Forbes Global 2000 companies identified as clients of this company. Matched using fuzzy matching against the global_2000 reference table.';
+
+COMMENT ON COLUMN public.sourcing_view.cg_key_platforms IS
+  'List of Capgemini platforms that are partners or clients of this company. Matched using fuzzy matching against the cap_sw_partners reference table.';
+
+COMMENT ON COLUMN public.sourcing_view.by_key_platforms IS
+  'List of Bouygues platforms that are partners or clients of this company. Matched using fuzzy matching against the by_platforms reference table.';
+
+COMMENT ON COLUMN public.sourcing_view.competitors_cg IS
+  'List of Capgemini competitors that are partners or clients of this company. Matched using fuzzy matching against the cap_competitors reference table.';
+
+COMMENT ON COLUMN public.sourcing_view.competitors_by IS
+  'List of Bouygues competitors that are partners or clients of this company. Matched using fuzzy matching against the by_competitors reference table.';
+
+COMMENT ON COLUMN public.sourcing_view.affiliates_cg IS
+  'List of Capgemini affiliates that are partners or clients of this company. Matched using fuzzy matching against the cap_affiliates reference table.';
+
+COMMENT ON COLUMN public.sourcing_view.affiliates_by IS
+  'List of Bouygues affiliates that are partners or clients of this company. Matched using fuzzy matching against the by_affiliates reference table.';
+
+-- GTM
+COMMENT ON COLUMN public.sourcing_view.gtm_target_cg IS
+  'Go-to-market target classification for the Capgemini fund perspective.';
+
+COMMENT ON COLUMN public.sourcing_view.gtm_target_by IS
+  'Go-to-market target classification for the Bouygues fund perspective.';
+
+-- Funding
+COMMENT ON COLUMN public.sourcing_view.vc_current_stage IS
+  'Current venture capital stage of the company (e.g. Seed, Series A, Series B…).';
+
+COMMENT ON COLUMN public.sourcing_view.first_vc_round_date IS
+  'Date of the first institutional VC round';
+
+COMMENT ON COLUMN public.sourcing_view.first_vc_round_amount IS
+  'Amount raised in the first institutional VC round in USD';
+
+COMMENT ON COLUMN public.sourcing_view.total_amount_raised IS
+  'Total cumulative funding raised by the company, in USD.';
+
+COMMENT ON COLUMN public.sourcing_view.last_funding_amount IS
+  'Amount raised in the most recent institutional VC round in USD';
+
+COMMENT ON COLUMN public.sourcing_view.last_funding_date IS
+  'Date of the most recent institutional VC round';
+
+COMMENT ON COLUMN public.sourcing_view.all_investors IS
+  'All investors of the company, aggregated from the funding_rounds table';
+
+COMMENT ON COLUMN public.sourcing_view.last_round_lead_investors IS
+  'Lead investor(s) of the most recent funding round';
+
+COMMENT ON COLUMN public.sourcing_view.total_nber_of_rounds IS
+  'Total number of funding rounds';
+
+-- Business
+COMMENT ON COLUMN public.sourcing_view.business_model IS
+  'Business model classification for the company. Classified by LLM using the business_models reference taxonomy.';
+
+COMMENT ON COLUMN public.sourcing_view.founders_background IS
+  'Summary of the founders professional background';
+
+COMMENT ON COLUMN public.sourcing_view.serial_entrepreneur IS
+  'Whether any founder of the company is a serial entrepreneur (has founded multiple companies)';
+
+-- Sectors/industries
+COMMENT ON COLUMN public.sourcing_view.primary_sector_served_cg IS
+  'Primary sector the company serves, classified using the taxonomy';
+
+COMMENT ON COLUMN public.sourcing_view.primary_industry_served_cg IS
+  'Primary industry the company serves, classified using the taxonomy';
+
+COMMENT ON COLUMN public.sourcing_view.primary_sector_served_by IS
+  'Primary sector the company serves, classified using the taxonomy';
+
+COMMENT ON COLUMN public.sourcing_view.primary_industry_served_by IS
+  'Primary industry the company serves, classified using the taxonomy';
+
+COMMENT ON COLUMN public.sourcing_view.all_industries_served IS
+  'Complete list of all industries the company serves, sorted by relevance.';
+
+COMMENT ON COLUMN public.sourcing_view.business_mapping IS
+  'Business mapping classification for the company. ';
+
+COMMENT ON COLUMN public.sourcing_view.tech_tags IS
+  'Dynamically computed technology tags, generated by the pipeline based on company data analysis.';
+
+-- Scores (manual overrides from companies table take precedence)
+COMMENT ON COLUMN public.sourcing_view.solution_fit_cg IS
+  'Solution fit score for the Capgemini fund. Integer score evaluating how well the company solution fits Capgemini needs. 1 = perfect fit, 4 = worst fit';
+
+COMMENT ON COLUMN public.sourcing_view.solution_fit_by IS
+  'Solution fit score for the Bouygues fund. Integer score evaluating how well the company solution fits Bouygues needs. 1 = perfect fit, 4 = worst fit';
+
+COMMENT ON COLUMN public.sourcing_view.business_fit_cg IS
+  'Business fit score for the Capgemini fund. Integer score evaluating business compatibility with Capgemini. 1 = perfect fit, 4 = worst fit';
+
+COMMENT ON COLUMN public.sourcing_view.business_fit_by IS
+  'Business fit score for the Bouygues fund. Integer score evaluating business compatibility with Bouygues. 1 = perfect fit, 4 = worst fit';
+
+COMMENT ON COLUMN public.sourcing_view.maturity_fit IS
+  'Maturity fit score. Fund-agnostic integer score evaluating the company maturity level for investment readiness. 1 = perfect fit, 4 = worst fit';
+
+COMMENT ON COLUMN public.sourcing_view.equity_score IS
+  'Equity score. Integer score evaluating the investment attractiveness from an equity perspective. 1 = perfect fit, 4 = worst fit';
+
+COMMENT ON COLUMN public.sourcing_view.traction_score IS
+  'Traction score. Integer score evaluating the company growth and market traction. 1 = perfect fit, 4 = worst fit';
+
+COMMENT ON COLUMN public.sourcing_view.global_fund_score IS
+  'Global fund fit score. Overall integer score combining all fit dimensions for fund-level decision making. 1 = perfect fit, 4 = worst fit';
+
+-- Attio
+COMMENT ON COLUMN public.sourcing_view.present_in_attio IS
+  'Whether this company currently exists in the Attio CRM. Used for pipeline synchronization.';
+
+COMMENT ON COLUMN public.sourcing_view.last_stage_in_attio IS
+  'Current pipeline stage of the company in the Attio CRM (e.g. Sourcing, First Contact, Due Diligence).';
+
+COMMENT ON COLUMN public.sourcing_view.last_status_in_attio IS
+  'Current status of the company in the Attio CRM.';
