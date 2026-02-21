@@ -464,7 +464,7 @@ function buildFilterValuesSection(filterValues: {
 // ---------------------------------------------------------------------------
 
 const RETRYABLE_STATUSES = new Set([408, 429, 500, 503, 504]);
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODEL = "gemini-3-flash-preview";
 
 async function callGeminiWithRetry(
   geminiApiKey: string,
