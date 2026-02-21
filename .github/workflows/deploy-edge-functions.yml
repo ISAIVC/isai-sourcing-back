@@ -37,3 +37,6 @@ jobs:
 
       - name: Deploy parse-free-text-query function
         run: supabase functions deploy parse-free-text-query --no-verify-jwt --project-ref $PROJECT_ID
+
+      - name: Deploy query-with-semantic-search function
+        run: supabase functions deploy query-with-semantic-search --no-verify-jwt --project-ref $PROJECT_ID
