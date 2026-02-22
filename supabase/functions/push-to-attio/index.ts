@@ -7,78 +7,92 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+function jsonResponse(body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    status,
+  });
+}
+
+function buildPrefectApiUrl(orgId: string, workspaceId: string): string {
+  return `https://api.prefect.cloud/api/accounts/${orgId}/workspaces/${workspaceId}`;
+}
+
+function buildFlowRunUrl(
+  orgId: string,
+  workspaceId: string,
+  flowRunId: string,
+): string {
+  return `https://app.prefect.cloud/account/${orgId}/workspace/${workspaceId}/runs/flow-run/${flowRunId}?preview=true&tab=logs`;
+}
+
 Deno.serve(async (req: Request) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // Parse the request body to get company_id
-    const { company_id } = await req.json();
+    const { domains, workspace } = await req.json();
 
-    if (!company_id) {
-      throw new Error("company_id is required");
-    }
-
-    console.log(`Processing push to Attio for company: ${company_id}`);
-
-    // Load the Attio API key from environment variables
-    const attioApiKey = Deno.env.get("ATTIO_API_KEY");
-    if (!attioApiKey) {
-      throw new Error("ATTIO_API_KEY is not set");
-    }
-
-    console.log("ATTIO_API_KEY loaded successfully");
-
-    // Simulate processing time (e.g. calling Attio API)
-    await new Promise((resolve) => setTimeout(resolve, 5_000));
-
-    // Randomly return success or failure
-    const isSuccess = Math.random() > 0.5;
-
-    if (isSuccess) {
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: `Company ${company_id} successfully pushed to Attio`,
-        }),
-        {
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-          status: 200,
-        }
-      );
-    } else {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          message: `Failed to push company ${company_id} to Attio. Please try again.`,
-        }),
-        {
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-          status: 200, // Still 200 — this is a business-logic failure, not a server error
-        }
+    if (
+      !domains ||
+      !Array.isArray(domains) ||
+      domains.length === 0 ||
+      !domains.every((d: unknown) => typeof d === "string")
+    ) {
+      return jsonResponse(
+        { success: false, error: "domains must be a non-empty array of strings" },
+        400,
       );
     }
-  } catch (error) {
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message,
+
+    if (workspace !== "cg" && workspace !== "by") {
+      return jsonResponse(
+        { success: false, error: 'workspace must be "cg" or "by"' },
+        400,
+      );
+    }
+
+    const prefectApiKey = Deno.env.get("PREFECT_API_KEY");
+    const prefectOrg = Deno.env.get("PREFECT_ORG");
+    const prefectWorkspace = Deno.env.get("PREFECT_WORKSPACE");
+    const deploymentId = Deno.env.get("PREFECT_PUSH_ATTIO_DEPLOYMENT_ID");
+
+    if (!prefectApiKey || !prefectOrg || !prefectWorkspace || !deploymentId) {
+      throw new Error(
+        "Missing required environment variables: PREFECT_API_KEY, PREFECT_ORG, PREFECT_WORKSPACE, PREFECT_PUSH_ATTIO_DEPLOYMENT_ID",
+      );
+    }
+
+    const endpoint =
+      `${buildPrefectApiUrl(prefectOrg, prefectWorkspace)}/deployments/${deploymentId}/create_flow_run`;
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${prefectApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        parameters: { domains, workspace },
       }),
-      {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json",
-        },
-        status: 500,
-      }
-    );
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Prefect API error: ${response.status} ${errorText}`,
+      );
+    }
+
+    const result = await response.json();
+
+    return jsonResponse({
+      success: true,
+      flow_run_name: result.name,
+      flow_run_url: buildFlowRunUrl(prefectOrg, prefectWorkspace, result.id),
+    });
+  } catch (error) {
+    return jsonResponse({ success: false, error: error.message }, 500);
   }
 });
