@@ -402,6 +402,18 @@ Deno.serve(async (req: Request) => {
       throw new Error("COHERE_API_KEY is not set");
     }
 
+    const filterCounts = [
+      parsed.tag_filters.length,
+      parsed.multitag_filters.length,
+      parsed.text_filters.length,
+      parsed.number_filters.length,
+      parsed.date_filters.length,
+      parsed.bool_filters.length,
+    ].reduce((a, b) => a + b, 0);
+    console.log(
+      `[query-with-semantic-search] Request received: semantic_query="${semanticQuery}" total_filters=${filterCounts} limit=${searchParseResult.limit ?? 1000}`,
+    );
+
     // Step 1: Embed the semantic query
     console.log("[1/4] Embedding semantic query...");
     const embeddingVector = await embedWithGemini(

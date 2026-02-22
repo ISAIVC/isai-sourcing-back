@@ -485,7 +485,7 @@ function buildFilterValuesSection(filterValues: {
 // ---------------------------------------------------------------------------
 
 const RETRYABLE_STATUSES = new Set([408, 429, 500, 503, 504]);
-const GEMINI_MODEL = "gemini-3-flash-preview";
+const GEMINI_MODEL = "gemini-3-pro-preview";
 
 async function callGeminiWithRetry(
   geminiApiKey: string,
@@ -533,6 +533,9 @@ async function callGeminiWithRetry(
     if (!response.ok) {
       if (RETRYABLE_STATUSES.has(response.status) && attempt < maxAttempts - 1) {
         lastError = new Error(`Gemini API returned ${response.status}, retrying`);
+        console.error(
+          `[parse-free-text-query] ${lastError.message} (attempt ${attempt + 1}/${maxAttempts})`,
+        );
         continue;
       }
       const errorText = await response.text();
@@ -571,6 +574,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    console.log(`[parse-free-text-query] Request received: query="${query.trim()}"`);
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
@@ -584,6 +589,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Load filter values from Supabase Storage
+    console.log(`[parse-free-text-query] Loading filter values from storage...`);
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const { data: fileData, error: downloadError } = await supabase.storage
       .from(searchResourcesBucket)
@@ -602,6 +608,9 @@ Deno.serve(async (req: Request) => {
       SYSTEM_PROMPT + "\n\n" + buildFilterValuesSection(filterValues);
 
     // Call Gemini with retry
+    console.log(
+      `[parse-free-text-query] Calling Gemini (${GEMINI_MODEL}) to parse query...`,
+    );
     const result = await callGeminiWithRetry(
       geminiApiKey,
       systemPrompt,
@@ -612,8 +621,13 @@ Deno.serve(async (req: Request) => {
       result.limit = 100;
     }
 
+    console.log(
+      `[parse-free-text-query] Parsed successfully: semantic_query="${result.semantic_query}" limit=${result.limit} tag_filters=${result.tag_filters.length} multitag_filters=${result.multitag_filters.length} number_filters=${result.number_filters.length}`,
+    );
+
     return jsonResponse({ success: true, result });
   } catch (error) {
+    console.error("[parse-free-text-query] Unhandled error:", error);
     return jsonResponse({ success: false, error: error.message }, 500);
   }
 });

@@ -57,6 +57,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    console.log(
+      `[assess-db-changes] Request received: file_path=${file_path}`,
+    );
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const bucketName = Deno.env.get("TRAXCN_EXPORTS_BUCKET_NAME");
@@ -66,6 +70,10 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    console.log(
+      `[assess-db-changes] Downloading file from bucket: ${bucketName}/${file_path}`,
+    );
 
     const { data: fileData, error: downloadError } = await supabase.storage
       .from(bucketName)
@@ -77,10 +85,17 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    console.log(`[assess-db-changes] File downloaded, extracting domains...`);
+
     const fileBuffer = await fileData.arrayBuffer();
     const domains = extractDomainsFromCompaniesSheet(fileBuffer);
 
+    console.log(
+      `[assess-db-changes] Extracted ${domains.length} unique domains from file`,
+    );
+
     if (!domains.length) {
+      console.log(`[assess-db-changes] No domains found, returning early`);
       return jsonResponse({
         success: true,
         number_of_companies_to_add: 0,
@@ -106,6 +121,10 @@ Deno.serve(async (req: Request) => {
     );
     const newDomains = domains.filter((d) => !existingDomains.has(d));
 
+    console.log(
+      `[assess-db-changes] DB diff complete: ${newDomains.length} to add, ${existingDomains.size} to update`,
+    );
+
     return jsonResponse({
       success: true,
       number_of_companies_to_add: newDomains.length,
@@ -114,6 +133,7 @@ Deno.serve(async (req: Request) => {
       existing_domains: [...existingDomains],
     });
   } catch (error) {
+    console.error("[assess-db-changes] Unhandled error:", error);
     return jsonResponse({ success: false, error: error.message }, 500);
   }
 });

@@ -53,6 +53,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    console.log(
+      `[push-to-attio] Request received: workspace=${workspace} domains=[${domains.join(", ")}]`,
+    );
+
     const prefectApiKey = Deno.env.get("PREFECT_API_KEY");
     const prefectOrg = Deno.env.get("PREFECT_ORG");
     const prefectWorkspace = Deno.env.get("PREFECT_WORKSPACE");
@@ -66,6 +70,8 @@ Deno.serve(async (req: Request) => {
 
     const endpoint =
       `${buildPrefectApiUrl(prefectOrg, prefectWorkspace)}/deployments/${deploymentId}/create_flow_run`;
+
+    console.log(`[push-to-attio] Triggering Prefect deployment: ${deploymentId}`);
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -87,12 +93,17 @@ Deno.serve(async (req: Request) => {
 
     const result = await response.json();
 
+    console.log(
+      `[push-to-attio] Flow run triggered: name=${result.name} id=${result.id}`,
+    );
+
     return jsonResponse({
       success: true,
       flow_run_name: result.name,
       flow_run_url: buildFlowRunUrl(prefectOrg, prefectWorkspace, result.id),
     });
   } catch (error) {
+    console.error("[push-to-attio] Unhandled error:", error);
     return jsonResponse({ success: false, error: error.message }, 500);
   }
 });
