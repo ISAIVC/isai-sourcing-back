@@ -119,6 +119,8 @@ type SourcingRow = Record<string, unknown> & { similarity?: number };
 
 const RETRYABLE_STATUSES = new Set([408, 429, 500, 503, 504]);
 
+const GEMINI_TIMEOUT_MS = 15_000;
+
 async function embedWithGemini(
   geminiApiKey: string,
   text: string,
@@ -141,17 +143,37 @@ async function embedWithGemini(
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      clearTimeout(timeoutId);
+      const isTimeout = err instanceof Error && err.name === "AbortError";
+      lastError = new Error(
+        isTimeout
+          ? `Gemini embedding timed out after ${GEMINI_TIMEOUT_MS}ms (attempt ${attempt + 1})`
+          : `Gemini embedding fetch failed: ${err}`,
+      );
+      console.error(lastError.message);
+      if (attempt < maxAttempts - 1) continue;
+      throw lastError;
+    }
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       if (RETRYABLE_STATUSES.has(response.status) && attempt < maxAttempts - 1) {
         lastError = new Error(
-          `Gemini embedding API returned ${response.status}, retrying`,
+          `Gemini embedding API returned ${response.status}, retrying (attempt ${attempt + 1})`,
         );
+        console.error(lastError.message);
         continue;
       }
       const errorText = await response.text();
@@ -164,9 +186,12 @@ async function embedWithGemini(
     const values: number[] | undefined = result?.embedding?.values;
 
     if (!values || values.length !== 1536) {
-      throw new Error(
-        `Unexpected embedding response: got ${values?.length ?? 0} dimensions`,
+      lastError = new Error(
+        `Unexpected embedding response: got ${values?.length ?? 0} dimensions (attempt ${attempt + 1})`,
       );
+      console.error(lastError.message);
+      if (attempt < maxAttempts - 1) continue;
+      throw lastError;
     }
 
     return values;
@@ -344,14 +369,20 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // semantic_query is required
-    if (parsed.semantic_query === null || parsed.semantic_query === undefined) {
+    // semantic_query is required and must be a non-empty string
+    if (
+      parsed.semantic_query === null ||
+      parsed.semantic_query === undefined ||
+      typeof parsed.semantic_query !== "string" ||
+      parsed.semantic_query.trim() === ""
+    ) {
       return jsonResponse(
-        { success: false, error: "semantic_query is required" },
+        { success: false, error: "semantic_query must be a non-empty string" },
         400,
       );
     }
 
+    const semanticQuery = parsed.semantic_query as string;
     const searchParseResult = parsed as unknown as SearchParseResult;
 
     // Environment variables
@@ -368,12 +399,15 @@ Deno.serve(async (req: Request) => {
     }
 
     // Step 1: Embed the semantic query
+    console.log("[1/4] Embedding semantic query...");
     const embeddingVector = await embedWithGemini(
       geminiApiKey,
-      searchParseResult.semantic_query as string,
+      semanticQuery,
     );
+    console.log("[1/4] Embedding done.");
 
     // Step 2: Vector search via match_companies RPC + filter chaining
+    console.log("[2/4] Running match_companies RPC...");
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     let query = supabase
@@ -388,20 +422,24 @@ Deno.serve(async (req: Request) => {
     if (error) {
       throw new Error(`Database query failed: ${error.message}`);
     }
+    console.log(`[2/4] RPC returned ${(data ?? []).length} rows.`);
 
     let results: SourcingRow[] = (data ?? []) as SourcingRow[];
 
     // Step 3: Cohere rerank
+    console.log("[3/4] Reranking with Cohere...");
     const { rows: rerankedRows, reranked } = await cohereRerank(
       cohereApiKey,
-      searchParseResult.semantic_query as string,
+      semanticQuery,
       results,
     );
     results = rerankedRows;
+    console.log(`[3/4] Rerank done (reranked=${reranked}).`);
 
     // Step 4: Apply limit
     const limit = searchParseResult.limit ?? 1000;
     const finalResults = results.slice(0, limit);
+    console.log(`[4/4] Returning ${finalResults.length} results.`);
 
     return jsonResponse({
       success: true,
@@ -410,6 +448,7 @@ Deno.serve(async (req: Request) => {
       reranked,
     });
   } catch (error) {
+    console.error("[query-with-semantic-search] Unhandled error:", error);
     return jsonResponse({ success: false, error: error.message }, 500);
   }
 });
