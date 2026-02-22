@@ -85,6 +85,10 @@ RETURNS TABLE (
   present_in_attio              boolean,
   last_stage_in_attio           text,
   last_status_in_attio          text,
+  headcount                     integer,
+  headcount_growth_l12m         numeric,
+  web_traffic                   integer,
+  web_traffic_growth_l12m       numeric,
   similarity                    float8
 )
 LANGUAGE sql STABLE SECURITY INVOKER
@@ -141,10 +145,15 @@ AS $$
     sv.present_in_attio,
     sv.last_stage_in_attio,
     sv.last_status_in_attio,
+    sv.headcount,
+    sv.headcount_growth_l12m,
+    sv.web_traffic,
+    sv.web_traffic_growth_l12m,
     1 - (ce.full_embedding <=> query_embedding) AS similarity
   FROM   public.sourcing_view sv
   JOIN   public.company_embeddings ce ON ce.domain = sv.website
   WHERE  ce.full_embedding IS NOT NULL
+  ORDER BY ce.full_embedding <=> query_embedding
 $$;
 
 GRANT EXECUTE ON FUNCTION public.match_companies(vector) TO authenticated;

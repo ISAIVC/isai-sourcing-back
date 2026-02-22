@@ -62,7 +62,11 @@ type NumberCol =
   | "maturity_fit"
   | "equity_score"
   | "traction_score"
-  | "global_fund_score";
+  | "global_fund_score"
+  | "headcount"
+  | "headcount_growth_l12m"
+  | "web_traffic"
+  | "web_traffic_growth_l12m";
 
 interface TagFilter {
   col: TagCol;

@@ -62,7 +62,11 @@ type NumberCol =
   | "maturity_fit"
   | "equity_score"
   | "traction_score"
-  | "global_fund_score";
+  | "global_fund_score"
+  | "headcount"
+  | "headcount_growth_l12m"
+  | "web_traffic"
+  | "web_traffic_growth_l12m";
 
 interface TagFilter {
   col: TagCol;
@@ -255,6 +259,10 @@ const RESPONSE_SCHEMA = {
               "equity_score",
               "traction_score",
               "global_fund_score",
+              "headcount",
+              "headcount_growth_l12m",
+              "web_traffic",
+              "web_traffic_growth_l12m",
             ],
           },
           op: {
@@ -417,6 +425,10 @@ containing two things:
     - equity_score: equity score (1=best, 4=worst)
     - traction_score: traction score (1=best, 4=worst)
     - global_fund_score: overall fund fit score (1=best, 4=worst)
+    - headcount: total employee count (integer, from Dealroom)
+    - headcount_growth_l12m: employee headcount growth over last 12 months, as a percentage (e.g. 25.5 for 25.5%, from Dealroom)
+    - web_traffic: monthly web traffic visits (integer, from Dealroom)
+    - web_traffic_growth_l12m: web traffic growth over last 12 months, as a percentage (e.g. 25.5 for 25.5%, from Dealroom)
 
   Date columns (ISO 8601: YYYY-MM-DD):
     - first_vc_round_date: date of the first VC round

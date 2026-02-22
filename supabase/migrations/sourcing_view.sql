@@ -71,7 +71,13 @@ SELECT
   -- Attio
   bcv.in_attio AS present_in_attio,
   bcv.attio_stage AS last_stage_in_attio,
-  bcv.attio_status AS last_status_in_attio
+  bcv.attio_status AS last_status_in_attio,
+
+  -- Dealroom enrichment (latest entry per domain)
+  dre.headcount,
+  dre.headcount_growth_l12m,
+  dre.web_traffic,
+  dre.web_traffic_growth_l12m
 
 FROM public.companies c
 LEFT JOIN public.business_computed_values bcv ON bcv.domain = c.domain
@@ -81,7 +87,14 @@ LEFT JOIN LATERAL (
   WHERE w.domain = c.domain
   ORDER BY w.sourcing_date DESC NULLS LAST
   LIMIT 1
-) wse ON true;
+) wse ON true
+LEFT JOIN LATERAL (
+  SELECT *
+  FROM public.dealroom_enrichment d
+  WHERE d.domain = c.domain
+  ORDER BY d.sourcing_date DESC NULLS LAST
+  LIMIT 1
+) dre ON true;
 
 -- Grant access to authenticated users (matches policy pattern on underlying tables)
 GRANT SELECT ON public.sourcing_view TO authenticated;
@@ -251,3 +264,16 @@ COMMENT ON COLUMN public.sourcing_view.last_stage_in_attio IS
 
 COMMENT ON COLUMN public.sourcing_view.last_status_in_attio IS
   'Current status of the company in the Attio CRM.';
+
+-- Dealroom enrichment
+COMMENT ON COLUMN public.sourcing_view.headcount IS
+  'Total employee count as reported by Dealroom, from the most recent Dealroom enrichment entry.';
+
+COMMENT ON COLUMN public.sourcing_view.headcount_growth_l12m IS
+  'Employee headcount growth over the last 12 months as reported by Dealroom, stored as percentage (e.g. 25.5 for 25.5%), from the most recent Dealroom enrichment entry.';
+
+COMMENT ON COLUMN public.sourcing_view.web_traffic IS
+  'Monthly web traffic (visits) as reported by Dealroom, from the most recent Dealroom enrichment entry.';
+
+COMMENT ON COLUMN public.sourcing_view.web_traffic_growth_l12m IS
+  'Web traffic growth over the last 12 months as reported by Dealroom, stored as percentage (e.g. 25.5 for 25.5%), from the most recent Dealroom enrichment entry.';

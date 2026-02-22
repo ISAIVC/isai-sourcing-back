@@ -676,18 +676,36 @@ CREATE INDEX IF NOT EXISTS idx_companies_inc_date ON public.companies(inc_date);
 CREATE INDEX IF NOT EXISTS idx_companies_created_at ON public.companies(created_at);
 CREATE INDEX IF NOT EXISTS idx_founders_company_id ON public.founders(company_id);
 CREATE INDEX IF NOT EXISTS idx_founders_name ON public.founders(name);
-<<<<<<< HEAD
-CREATE INDEX IF NOT EXISTS idx_hunter_enrichment_founder_id ON public.hunter_enrichment(founder_id);
-CREATE INDEX IF NOT EXISTS idx_web_scraping_enrichment_company_id ON public.web_scraping_enrichment(company_id);
-CREATE INDEX IF NOT EXISTS idx_dealroom_enrichment_company_id ON public.dealroom_enrichment(company_id);
-=======
 CREATE INDEX IF NOT EXISTS idx_hunter_enrichment_domain ON public.hunter_enrichment(domain);
 CREATE INDEX IF NOT EXISTS idx_web_scraping_enrichment_domain ON public.web_scraping_enrichment(domain);
 CREATE INDEX IF NOT EXISTS idx_dealroom_enrichment_domain ON public.dealroom_enrichment(domain);
->>>>>>> 0100e59 (update tables with last remote version)
 CREATE INDEX IF NOT EXISTS idx_funding_rounds_company_id ON public.funding_rounds(company_id);
 CREATE INDEX IF NOT EXISTS idx_funding_rounds_date ON public.funding_rounds(date);
 CREATE INDEX IF NOT EXISTS idx_funding_rounds_stage ON public.funding_rounds(stage);
 CREATE INDEX IF NOT EXISTS idx_bcv_domain ON public.business_computed_values(domain);
 CREATE INDEX IF NOT EXISTS idx_bcv_solution_fit_cg ON public.business_computed_values(solution_fit_cg);
 CREATE INDEX IF NOT EXISTS idx_bcv_solution_fit_by ON public.business_computed_values(solution_fit_by);
+
+-- Composite indexes for sourcing_view LATERAL joins.
+-- Each LATERAL does: WHERE domain = x ORDER BY sourcing_date DESC NULLS LAST LIMIT 1
+-- A (domain, sourcing_date DESC) index makes this a single index seek per company row.
+CREATE INDEX IF NOT EXISTS idx_web_scraping_enrichment_domain_date
+  ON public.web_scraping_enrichment(domain, sourcing_date DESC NULLS LAST);
+
+CREATE INDEX IF NOT EXISTS idx_dealroom_enrichment_domain_date
+  ON public.dealroom_enrichment(domain, sourcing_date DESC NULLS LAST);
+
+-- HNSW vector index for match_companies similarity search.
+-- Replaces the O(n) sequential scan with approximate nearest-neighbor in O(log n).
+-- vector_cosine_ops matches the <=> operator used in the query.
+CREATE INDEX IF NOT EXISTS idx_company_embeddings_full_embedding_hnsw
+  ON public.company_embeddings
+  USING hnsw (full_embedding vector_cosine_ops);
+
+-- GIN trigram indexes for search_companies (pg_trgm already enabled).
+-- Allows similarity() calls on name/domain to pre-filter via index instead of full scan.
+CREATE INDEX IF NOT EXISTS idx_companies_name_trgm
+  ON public.companies USING gin (name gin_trgm_ops);
+
+CREATE INDEX IF NOT EXISTS idx_companies_domain_trgm
+  ON public.companies USING gin (domain gin_trgm_ops);
