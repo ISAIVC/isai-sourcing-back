@@ -99,7 +99,7 @@ interface DateFilter {
 }
 
 interface BoolFilter {
-  col: "present_in_attio";
+  col: "present_in_attio" | "serial_entrepreneur";
   val: boolean;
 }
 

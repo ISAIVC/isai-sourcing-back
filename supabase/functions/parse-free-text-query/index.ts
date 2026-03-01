@@ -99,7 +99,7 @@ interface DateFilter {
 }
 
 interface BoolFilter {
-  col: "present_in_attio";
+  col: "present_in_attio" | "serial_entrepreneur";
   val: boolean;
 }
 
@@ -317,7 +317,7 @@ const RESPONSE_SCHEMA = {
           col: {
             type: "STRING",
             description: "Name of the boolean column to filter on.",
-            enum: ["present_in_attio"],
+            enum: ["present_in_attio", "serial_entrepreneur"],
           },
           val: {
             type: "BOOLEAN",
@@ -436,6 +436,7 @@ containing two things:
 
   Boolean columns:
     - present_in_attio: true if the company is tracked in the CRM
+    - serial_entrepreneur: true if at least one founder is a serial entrepreneur
 
 **Filter Rules:**
   - Use \`in\` / \`contains\` when the analyst names specific known values.
