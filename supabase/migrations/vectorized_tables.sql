@@ -12,8 +12,8 @@ CREATE TABLE IF NOT EXISTS public.company_embeddings (
 
   domain TEXT NOT NULL UNIQUE REFERENCES public.companies(domain) ON DELETE CASCADE,
 
-  solution_and_use_cases_embedding vector(1536)
-  full_embedding vector(1536),
+  solution_and_use_cases_embedding vector(768),
+  full_embedding vector(768)
 );
 
 -- Enable RLS

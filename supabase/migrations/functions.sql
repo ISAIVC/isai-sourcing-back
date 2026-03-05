@@ -26,10 +26,10 @@ REVOKE EXECUTE ON FUNCTION public.search_companies(TEXT, FLOAT, INT) FROM anon;
 
 -- Migration: match_companies RPC for vector similarity search
 -- Requires: pgvector extension (enabled in vectorized_tables.sql)
---           company_embeddings table with full_embedding vector(1536)
+--           company_embeddings table with full_embedding vector(768)
 --           sourcing_view
 
-CREATE OR REPLACE FUNCTION public.match_companies(query_embedding vector(1536))
+CREATE OR REPLACE FUNCTION public.match_companies(query_embedding vector(768))
 RETURNS TABLE (
   fund_prime_scope              text,
   logo                          text,

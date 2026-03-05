@@ -136,7 +136,7 @@ async function embedWithGemini(
   const requestBody = {
     content: { parts: [{ text }] },
     taskType: "RETRIEVAL_QUERY",
-    outputDimensionality: 1536,
+    outputDimensionality: 768,
   };
 
   let lastError: Error = new Error("Max retries exceeded");
