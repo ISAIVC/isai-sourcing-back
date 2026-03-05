@@ -21,7 +21,6 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
 
 type TagCol =
   | "fund_prime_scope"
-  | "hq_country"
   | "hq_city"
   | "gtm_target_cg"
   | "gtm_target_by"
@@ -36,6 +35,7 @@ type TagCol =
   | "last_status_in_attio";
 
 type MultitagCol =
+  | "hq_country"
   | "global_2000_clients"
   | "cg_key_platforms"
   | "by_key_platforms"
@@ -136,7 +136,6 @@ const RESPONSE_SCHEMA = {
             description: "Name of the tag column to filter on.",
             enum: [
               "fund_prime_scope",
-              "hq_country",
               "hq_city",
               "gtm_target_cg",
               "gtm_target_by",
@@ -178,6 +177,7 @@ const RESPONSE_SCHEMA = {
             type: "STRING",
             description: "Name of the multitag (array) column to filter on.",
             enum: [
+              "hq_country",
               "global_2000_clients",
               "cg_key_platforms",
               "by_key_platforms",
@@ -379,7 +379,6 @@ containing two things:
 **Sourcing Table – Column Reference:**
   Tag columns (single-value enum):
     - fund_prime_scope: which ISAI fund the company primarily targets
-    - hq_country: country where the company is headquartered
     - hq_city: city where the company is headquartered
     - gtm_target_cg: go-to-market target in the Capgemini ecosystem
     - gtm_target_by: go-to-market target in the VINCI/Build ecosystem
@@ -394,6 +393,7 @@ containing two things:
     - last_status_in_attio: last status recorded in the CRM
 
   Multitag columns (array, multi-value):
+    - hq_country: countries where the company is headquartered (array)
     - global_2000_clients: Forbes Global 2000 clients of the company
     - cg_key_platforms: key Capgemini platforms the company integrates with
     - by_key_platforms: key VINCI/Build platforms the company integrates with

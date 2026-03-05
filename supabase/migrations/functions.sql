@@ -35,7 +35,7 @@ RETURNS TABLE (
   logo                          text,
   name                          text,
   website                       text,
-  hq_country                    text,
+  hq_country                    text[],
   hq_city                       text,
   inc_date                      integer,
   description                   text,
@@ -154,3 +154,74 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION public.match_companies(vector) TO authenticated;
+
+-- Returns companies that have never been scraped or whose last scrape is on or before ref_date
+CREATE OR REPLACE FUNCTION public.get_companies_that_should_be_scraped(ref_date date, row_limit integer)
+RETURNS TABLE(domain text, sourcing_date timestamp with time zone)
+LANGUAGE sql AS $$
+  SELECT
+    c.domain,
+    wse.sourcing_date
+  FROM public.companies c
+  LEFT JOIN LATERAL (
+    SELECT *
+    FROM public.web_scraping_enrichment w
+    WHERE w.domain = c.domain
+    ORDER BY w.sourcing_date DESC NULLS LAST
+    LIMIT 1
+  ) wse ON true
+  WHERE wse.sourcing_date IS NULL OR wse.sourcing_date <= ref_date
+  ORDER BY RANDOM()
+  LIMIT row_limit
+$$;
+
+-- Returns companies that have never been Dealroom-enriched or whose last enrichment is on or before ref_date
+CREATE OR REPLACE FUNCTION public.get_companies_that_should_be_dealroom_enriched(ref_date date, row_limit integer)
+RETURNS TABLE(domain text, sourcing_date timestamp with time zone)
+LANGUAGE sql AS $$
+  SELECT
+    c.domain,
+    dr.sourcing_date
+  FROM public.companies c
+  LEFT JOIN LATERAL (
+    SELECT *
+    FROM public.dealroom_enrichment d
+    WHERE d.domain = c.domain
+    ORDER BY d.sourcing_date DESC NULLS LAST
+    LIMIT 1
+  ) dr ON true
+  WHERE dr.sourcing_date IS NULL OR dr.sourcing_date <= ref_date
+  ORDER BY RANDOM()
+  LIMIT row_limit
+$$;
+
+-- Returns all distinct non-null values for a given column of sourcing_view.
+-- Handles both scalar columns (returns distinct cast-to-text values) and
+-- array columns (unnests and returns distinct element values).
+-- SECURITY DEFINER so callers need only EXECUTE privilege, not direct table access.
+CREATE OR REPLACE FUNCTION public.get_distinct_values(col_name text)
+RETURNS text[]
+LANGUAGE plpgsql STABLE SECURITY DEFINER AS $$
+DECLARE
+  col_type text;
+  result text[];
+BEGIN
+  SELECT udt_name INTO col_type
+  FROM information_schema.columns
+  WHERE table_name = 'sourcing_view' AND column_name = col_name;
+
+  IF col_type = '_text' THEN
+    EXECUTE format(
+      'SELECT COALESCE(ARRAY(SELECT DISTINCT u FROM sourcing_view, LATERAL unnest(%I) AS u WHERE u IS NOT NULL ORDER BY u), ARRAY[]::text[])',
+      col_name
+    ) INTO result;
+  ELSE
+    EXECUTE format(
+      'SELECT COALESCE(ARRAY(SELECT DISTINCT %I::text FROM sourcing_view WHERE %I IS NOT NULL ORDER BY %I::text), ARRAY[]::text[])',
+      col_name, col_name, col_name
+    ) INTO result;
+  END IF;
+
+  RETURN COALESCE(result, ARRAY[]::text[]);
+END;
+$$;

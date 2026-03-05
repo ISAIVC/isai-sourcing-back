@@ -21,7 +21,6 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
 
 type TagCol =
   | "fund_prime_scope"
-  | "hq_country"
   | "hq_city"
   | "gtm_target_cg"
   | "gtm_target_by"
@@ -36,6 +35,7 @@ type TagCol =
   | "last_status_in_attio";
 
 type MultitagCol =
+  | "hq_country"
   | "global_2000_clients"
   | "cg_key_platforms"
   | "by_key_platforms"

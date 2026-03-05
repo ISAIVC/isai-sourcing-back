@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.companies (
   logo TEXT,
   name TEXT NOT NULL,
   domain TEXT NOT NULL UNIQUE,
-  hq_country TEXT,
+  hq_country TEXT[],
   hq_city TEXT,
   inc_date INTEGER, -- Year only (YYYY)
   description TEXT, -- max 20 words enforced at application level
@@ -61,7 +61,7 @@ COMMENT ON COLUMN public.companies.domain IS
   'Main company domain name. Sources: CB (organizations.csv → domain), Tracxn (Companies Covered 1.1 → Domain Name). Priority: Tracxn.';
 
 COMMENT ON COLUMN public.companies.hq_country IS
-  'Country where the company headquarters is located. Sources: CB (organizations.csv → country_code), Tracxn (Companies Covered 1.1 → Country). Priority: Tracxn.';
+  'Countries where the company headquarters are located. Sources: CB (organizations.csv → country_code), Tracxn (Companies Covered 1.1 → Country). Priority: Tracxn.';
 
 COMMENT ON COLUMN public.companies.hq_city IS
   'City where the company headquarters is located. Sources: CB (organizations.csv → city), Tracxn (Companies Covered 1.1 → City). Priority: Tracxn.';
@@ -243,7 +243,7 @@ CREATE TABLE IF NOT EXISTS public.web_scraping_enrichment (
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
 
-  company_id UUID NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
+  domain TEXT NOT NULL REFERENCES public.companies(domain) ON DELETE CASCADE,
   storage_path TEXT, -- Path in Supabase Storage containing the raw scraped website data
   sourcing_date DATE, -- Date when the website was scraped
   description TEXT,
@@ -254,7 +254,8 @@ CREATE TABLE IF NOT EXISTS public.web_scraping_enrichment (
   key_clients TEXT[],
   key_partners TEXT[],
   nb_of_clients_identified BIGINT,
-  success BOOLEAN
+  success BOOLEAN,
+  tech_description TEXT
 );
 
 -- web_scraping_enrichment column descriptions
@@ -270,8 +271,8 @@ COMMENT ON COLUMN public.web_scraping_enrichment.created_at IS
 COMMENT ON COLUMN public.web_scraping_enrichment.updated_at IS
   'Timestamp of the last modification to the enrichment record. Automatically updated via trigger.';
 
-COMMENT ON COLUMN public.web_scraping_enrichment.company_id IS
-  'Foreign key referencing the company this enrichment belongs to. Cascades on delete.';
+COMMENT ON COLUMN public.web_scraping_enrichment.domain IS
+  'Domain of the company this enrichment belongs to. Foreign key referencing companies(domain). Cascades on delete.';
 
 COMMENT ON COLUMN public.web_scraping_enrichment.storage_path IS
   'Path in Supabase Storage pointing to the raw scraped website data. Used to reprocess or audit enrichment data.';
@@ -302,6 +303,9 @@ COMMENT ON COLUMN public.web_scraping_enrichment.key_partners IS
 
 COMMENT ON COLUMN public.web_scraping_enrichment.nb_of_clients_identified IS
   'Number of clients identified or claimed on the website (stored as text to accommodate ranges or qualifiers like "100+").';
+
+COMMENT ON COLUMN public.web_scraping_enrichment.tech_description IS
+  'AI-extracted description of the technology stack or technical approach used by the company, derived from website scraping.';
 
 -- Create the hunter_enrichment table
 CREATE TABLE IF NOT EXISTS public.hunter_enrichment (
@@ -553,6 +557,44 @@ COMMENT ON COLUMN public.business_computed_values.serial_entrepreneur IS
   'Whether any founder of the company is a serial entrepreneur (has founded multiple companies).';
 
 
+-- Create the one_pager table
+CREATE TABLE IF NOT EXISTS public.one_pager (
+  domain TEXT PRIMARY KEY REFERENCES public.companies(domain) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+
+  overview TEXT,
+  management_and_team TEXT,
+  solution TEXT,
+  market_and_competition TEXT
+);
+
+-- one_pager column descriptions
+COMMENT ON TABLE public.one_pager IS
+  'AI-generated one-pager content for each company. Each row holds the latest generated sections for a given company domain, produced by the create-onepager Edge Function via Mistral AI.';
+
+COMMENT ON COLUMN public.one_pager.domain IS
+  'Primary key and foreign key referencing the company this one-pager belongs to. Cascades on delete.';
+
+COMMENT ON COLUMN public.one_pager.created_at IS
+  'Timestamp when the one-pager record was first created in the database.';
+
+COMMENT ON COLUMN public.one_pager.updated_at IS
+  'Timestamp of the last modification to the one-pager record. Automatically updated via trigger.';
+
+COMMENT ON COLUMN public.one_pager.overview IS
+  'High-level overview of the company: what it does, its value proposition, and key facts.';
+
+COMMENT ON COLUMN public.one_pager.management_and_team IS
+  'Summary of the founding and management team, their backgrounds, and relevant experience.';
+
+COMMENT ON COLUMN public.one_pager.solution IS
+  'Description of the company product or solution, key features, and differentiators.';
+
+COMMENT ON COLUMN public.one_pager.market_and_competition IS
+  'Overview of the target market, market size, and competitive landscape.';
+
+
 -- Create trigger function for updated_at
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 RETURNS TRIGGER
@@ -614,6 +656,13 @@ CREATE TRIGGER update_business_computed_values_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION public.update_updated_at_column();
 
+-- Create trigger for one_pager updated_at
+DROP TRIGGER IF EXISTS update_one_pager_updated_at ON public.one_pager;
+CREATE TRIGGER update_one_pager_updated_at
+  BEFORE UPDATE ON public.one_pager
+  FOR EACH ROW
+  EXECUTE FUNCTION public.update_updated_at_column();
+
 -- Enable Row Level Security
 ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.founders ENABLE ROW LEVEL SECURITY;
@@ -622,6 +671,7 @@ ALTER TABLE public.web_scraping_enrichment ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dealroom_enrichment ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.funding_rounds ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.business_computed_values ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.one_pager ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for authenticated users (full access)
 CREATE POLICY "Authenticated users have full access"
@@ -666,10 +716,15 @@ CREATE POLICY "Authenticated users have full access"
   USING (true)
   WITH CHECK (true);
 
+CREATE POLICY "Authenticated users have full access"
+  ON public.one_pager FOR ALL
+  TO authenticated
+  USING (true)
+  WITH CHECK (true);
+
 
 -- Create indexes for common queries
 CREATE INDEX IF NOT EXISTS idx_companies_name ON public.companies(name);
-CREATE INDEX IF NOT EXISTS idx_companies_hq_country ON public.companies(hq_country);
 CREATE INDEX IF NOT EXISTS idx_companies_hq_city ON public.companies(hq_city);
 CREATE INDEX IF NOT EXISTS idx_companies_vc_current_stage ON public.companies(vc_current_stage);
 CREATE INDEX IF NOT EXISTS idx_companies_inc_date ON public.companies(inc_date);
@@ -685,6 +740,7 @@ CREATE INDEX IF NOT EXISTS idx_funding_rounds_stage ON public.funding_rounds(sta
 CREATE INDEX IF NOT EXISTS idx_bcv_domain ON public.business_computed_values(domain);
 CREATE INDEX IF NOT EXISTS idx_bcv_solution_fit_cg ON public.business_computed_values(solution_fit_cg);
 CREATE INDEX IF NOT EXISTS idx_bcv_solution_fit_by ON public.business_computed_values(solution_fit_by);
+CREATE INDEX IF NOT EXISTS idx_one_pager_domain ON public.one_pager(domain);
 
 -- Composite indexes for sourcing_view LATERAL joins.
 -- Each LATERAL does: WHERE domain = x ORDER BY sourcing_date DESC NULLS LAST LIMIT 1

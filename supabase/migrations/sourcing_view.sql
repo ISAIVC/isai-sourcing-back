@@ -117,7 +117,7 @@ COMMENT ON COLUMN public.sourcing_view.website IS
   'Main company domain name.';
 
 COMMENT ON COLUMN public.sourcing_view.hq_country IS
-  'Country where the company headquarters is located.';
+  'Countries where the company headquarters are located (array).';
 
 COMMENT ON COLUMN public.sourcing_view.hq_city IS
   'City where the company headquarters is located.';
