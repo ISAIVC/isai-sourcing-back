@@ -205,74 +205,6 @@ async function embedWithGemini(
 }
 
 // ---------------------------------------------------------------------------
-// Filter application helper
-// ---------------------------------------------------------------------------
-
-// "domain" in the filter schema maps to "website" in sourcing_view
-function resolveCol(col: string): string {
-  return col === "domain" ? "website" : col;
-}
-
-// deno-lint-ignore no-explicit-any
-function applyFilters(query: any, parsed: SearchParseResult): any {
-  for (const f of parsed.tag_filters) {
-    const col = resolveCol(f.col);
-    if (f.op === "in" && f.val?.length) {
-      query = query.in(col, f.val);
-    } else if (f.op === "not_null") {
-      query = query.not(col, "is", null);
-    }
-  }
-
-  for (const f of parsed.multitag_filters) {
-    const col = resolveCol(f.col);
-    if (f.op === "contains" && f.val?.length) {
-      query = query.overlaps(col, f.val);
-    } else if (f.op === "not_empty") {
-      query = query.not(col, "eq", "{}");
-    }
-  }
-
-  for (const f of parsed.text_filters) {
-    const col = resolveCol(f.col);
-    if (f.op === "contains" && f.val != null) {
-      query = query.ilike(col, `%${f.val}%`);
-    } else if (f.op === "not_null") {
-      query = query.not(col, "is", null);
-    }
-  }
-
-  for (const f of parsed.number_filters) {
-    const col = resolveCol(f.col);
-    if (f.op === "gte" && f.val != null) {
-      query = query.gte(col, f.val);
-    } else if (f.op === "lte" && f.val != null) {
-      query = query.lte(col, f.val);
-    } else if (f.op === "not_null") {
-      query = query.not(col, "is", null);
-    }
-  }
-
-  for (const f of parsed.date_filters) {
-    const col = resolveCol(f.col);
-    if (f.op === "gte" && f.val != null) {
-      query = query.gte(col, f.val);
-    } else if (f.op === "lte" && f.val != null) {
-      query = query.lte(col, f.val);
-    } else if (f.op === "not_null") {
-      query = query.not(col, "is", null);
-    }
-  }
-
-  for (const f of parsed.bool_filters) {
-    const col = resolveCol(f.col);
-    query = query.eq(col, f.val);
-  }
-
-  return query;
-}
-
-// ---------------------------------------------------------------------------
 // Cohere rerank
 // ---------------------------------------------------------------------------
 
@@ -422,18 +354,24 @@ Deno.serve(async (req: Request) => {
     );
     console.log("[1/4] Embedding done.");
 
-    // Step 2: Vector search via match_companies RPC + filter chaining
-    console.log("[2/4] Running match_companies RPC...");
+    // Step 2: Vector search via match_companies_filtered RPC (filters + ORDER BY + LIMIT in one query)
+    console.log("[2/4] Running match_companies_filtered RPC...");
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    let query = supabase
-      .rpc("match_companies", { query_embedding: embeddingVector })
-      .order("similarity", { ascending: false })
-      .limit(1000);
+    const filtersJsonb = {
+      tag_filters:      searchParseResult.tag_filters,
+      multitag_filters: searchParseResult.multitag_filters,
+      text_filters:     searchParseResult.text_filters,
+      number_filters:   searchParseResult.number_filters,
+      date_filters:     searchParseResult.date_filters,
+      bool_filters:     searchParseResult.bool_filters,
+    };
 
-    query = applyFilters(query, searchParseResult);
-
-    const { data, error } = await query;
+    const { data, error } = await supabase.rpc("match_companies_filtered", {
+      p_embedding: embeddingVector,
+      p_filters:   filtersJsonb,
+      p_limit:     searchParseResult.limit ?? 1000,
+    });
 
     if (error) {
       throw new Error(`Database query failed: ${error.message}`);
