@@ -28,6 +28,26 @@ function extractDomainsFromCompaniesSheet(fileBuffer: ArrayBuffer): string[] {
   }
 
   const sheet = workbook.Sheets[companiesSheet];
+
+  // Tracxn exports use `<dimension ref="A1"/>` (incorrect metadata), which causes
+  // SheetJS to set sheet['!ref'] = "A1" and sheet_to_json to only see one cell.
+  // Fix: recompute !ref from the actual cell keys present in the sheet object.
+  const cellKeys = Object.keys(sheet).filter((k) => !k.startsWith("!"));
+  if (cellKeys.length > 0) {
+    let maxR = 0, maxC = 0;
+    for (const k of cellKeys) {
+      try {
+        const addr = XLSX.utils.decode_cell(k);
+        if (addr.r > maxR) maxR = addr.r;
+        if (addr.c > maxC) maxC = addr.c;
+      } catch (_) { /* skip non-cell keys */ }
+    }
+    sheet["!ref"] = XLSX.utils.encode_range(
+      { r: 0, c: 0 },
+      { r: maxR, c: maxC },
+    );
+  }
+
   // Row index 5 (6th row) is the header, matching Python's pd.read_excel(header=5)
   const rows: Record<string, string>[] = XLSX.utils.sheet_to_json(sheet, {
     range: 5,
