@@ -189,7 +189,7 @@ async function embedWithGemini(
     const result = await response.json();
     const values: number[] | undefined = result?.embedding?.values;
 
-    if (!values || values.length !== 1536) {
+    if (!values || values.length !== 768) {
       lastError = new Error(
         `Unexpected embedding response: got ${values?.length ?? 0} dimensions (attempt ${attempt + 1})`,
       );
