@@ -17,17 +17,27 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
 }
 
 function extractDomainsFromCompaniesSheet(fileBuffer: ArrayBuffer): string[] {
-  const workbook = XLSX.read(new Uint8Array(fileBuffer), { type: "array" });
+  const data = new Uint8Array(fileBuffer);
 
-  const companiesSheet = workbook.SheetNames.find((name: string) =>
+  // First pass: cheap metadata-only read to find the Companies sheet name.
+  // Tracxn exports have 15 sheets (with images/drawings); parsing all of them
+  // exceeds the Edge Function CPU time limit. We only need one sheet.
+  const meta = XLSX.read(data, { type: "array", bookSheets: true });
+  const companiesSheetName = meta.SheetNames.find((name: string) =>
     name.startsWith("Companies")
   );
 
-  if (!companiesSheet) {
+  if (!companiesSheetName) {
     throw new Error("No sheet starting with 'Companies' found in the file");
   }
 
-  const sheet = workbook.Sheets[companiesSheet];
+  // Second pass: parse only the Companies sheet to stay within CPU limits.
+  const workbook = XLSX.read(data, {
+    type: "array",
+    sheets: companiesSheetName,
+  });
+
+  const sheet = workbook.Sheets[companiesSheetName];
 
   // Tracxn exports use `<dimension ref="A1"/>` (incorrect metadata), which causes
   // SheetJS to set sheet['!ref'] = "A1" and sheet_to_json to only see one cell.
