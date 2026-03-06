@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { getGoogleAccessToken } from "../_shared/google-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -489,13 +490,15 @@ const RETRYABLE_STATUSES = new Set([408, 429, 500, 503, 504]);
 const GEMINI_MODEL = "gemini-3-pro-preview";
 
 async function callGeminiWithRetry(
-  geminiApiKey: string,
+  token: string,
+  project: string,
+  location: string,
   systemPrompt: string,
   userQuery: string,
   maxAttempts = 6,
 ): Promise<SearchParseResult> {
   const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`;
+    `https://aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/${GEMINI_MODEL}:generateContent`;
 
   const requestBody = {
     system_instruction: { parts: [{ text: systemPrompt }] },
@@ -527,7 +530,10 @@ async function callGeminiWithRetry(
 
     const response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
       body: JSON.stringify(requestBody),
     });
 
@@ -579,15 +585,25 @@ Deno.serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+    const googleCredentials = Deno.env.get("GOOGLE_CREDENTIALS");
+    const googleProject = Deno.env.get("GOOGLE_CLOUD_PROJECT");
+    const googleLocation = Deno.env.get("GOOGLE_CLOUD_LOCATION") ?? "global";
     const searchResourcesBucket = Deno.env.get("SEARCH_RESOURCES_BUCKET_NAME");
 
-    if (!geminiApiKey) {
-      throw new Error("GEMINI_API_KEY is not set");
+    if (!googleCredentials) {
+      throw new Error("GOOGLE_CREDENTIALS is not set");
+    }
+    if (!googleProject) {
+      throw new Error("GOOGLE_CLOUD_PROJECT is not set");
     }
     if (!searchResourcesBucket) {
       throw new Error("SEARCH_RESOURCES_BUCKET_NAME is not set");
     }
+
+    // Obtain short-lived OAuth2 token
+    const token = await getGoogleAccessToken(googleCredentials, [
+      "https://www.googleapis.com/auth/cloud-platform",
+    ]);
 
     // Load filter values from Supabase Storage
     console.log(`[parse-free-text-query] Loading filter values from storage...`);
@@ -613,7 +629,9 @@ Deno.serve(async (req: Request) => {
       `[parse-free-text-query] Calling Gemini (${GEMINI_MODEL}) to parse query...`,
     );
     const result = await callGeminiWithRetry(
-      geminiApiKey,
+      token,
+      googleProject,
+      googleLocation,
       systemPrompt,
       query.trim(),
     );

@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { getGoogleAccessToken } from "../_shared/google-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -126,17 +127,18 @@ const RETRYABLE_STATUSES = new Set([408, 429, 500, 503, 504]);
 const GEMINI_TIMEOUT_MS = 15_000;
 
 async function embedWithGemini(
-  geminiApiKey: string,
+  token: string,
+  project: string,
+  location: string,
   text: string,
   maxAttempts = 6,
 ): Promise<number[]> {
   const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${geminiApiKey}`;
+    `https://aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/publishers/google/models/gemini-embedding-001:predict`;
 
   const requestBody = {
-    content: { parts: [{ text }] },
-    taskType: "RETRIEVAL_QUERY",
-    outputDimensionality: 768,
+    instances: [{ content: text, task_type: "RETRIEVAL_QUERY" }],
+    parameters: { outputDimensionality: 768 },
   };
 
   let lastError: Error = new Error("Max retries exceeded");
@@ -154,7 +156,10 @@ async function embedWithGemini(
     try {
       response = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
@@ -187,7 +192,7 @@ async function embedWithGemini(
     }
 
     const result = await response.json();
-    const values: number[] | undefined = result?.embedding?.values;
+    const values: number[] | undefined = result?.predictions?.[0]?.embeddings?.values;
 
     if (!values || values.length !== 768) {
       lastError = new Error(
@@ -324,15 +329,25 @@ Deno.serve(async (req: Request) => {
     // Environment variables
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+    const googleCredentials = Deno.env.get("GOOGLE_CREDENTIALS");
+    const googleProject = Deno.env.get("GOOGLE_CLOUD_PROJECT");
+    const googleLocation = Deno.env.get("GOOGLE_CLOUD_LOCATION") ?? "global";
     const cohereApiKey = Deno.env.get("COHERE_API_KEY");
 
-    if (!geminiApiKey) {
-      throw new Error("GEMINI_API_KEY is not set");
+    if (!googleCredentials) {
+      throw new Error("GOOGLE_CREDENTIALS is not set");
+    }
+    if (!googleProject) {
+      throw new Error("GOOGLE_CLOUD_PROJECT is not set");
     }
     if (!cohereApiKey) {
       throw new Error("COHERE_API_KEY is not set");
     }
+
+    // Obtain short-lived OAuth2 token
+    const token = await getGoogleAccessToken(googleCredentials, [
+      "https://www.googleapis.com/auth/cloud-platform",
+    ]);
 
     const filterCounts = [
       parsed.tag_filters.length,
@@ -349,7 +364,9 @@ Deno.serve(async (req: Request) => {
     // Step 1: Embed the semantic query
     console.log("[1/4] Embedding semantic query...");
     const embeddingVector = await embedWithGemini(
-      geminiApiKey,
+      token,
+      googleProject,
+      googleLocation,
       semanticQuery,
     );
     console.log("[1/4] Embedding done.");
