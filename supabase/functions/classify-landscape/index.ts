@@ -1,5 +1,4 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { getGoogleAccessToken } from "../_shared/google-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,6 +12,77 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
     status,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Google auth (inlined from _shared/google-auth.ts)
+// ---------------------------------------------------------------------------
+
+async function getGoogleAccessToken(
+  credentialsBase64: string,
+  scopes: string[],
+): Promise<string> {
+  const credentials = JSON.parse(atob(credentialsBase64));
+  const { client_email, private_key } = credentials as {
+    client_email: string;
+    private_key: string;
+  };
+
+  const now = Math.floor(Date.now() / 1000);
+  const base64url = (obj: unknown): string =>
+    btoa(JSON.stringify(obj)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+
+  const header = base64url({ alg: "RS256", typ: "JWT" });
+  const payload = base64url({
+    iss: client_email,
+    scope: scopes.join(" "),
+    aud: "https://oauth2.googleapis.com/token",
+    iat: now,
+    exp: now + 3600,
+  });
+
+  const signingInput = `${header}.${payload}`;
+  const pemBody = private_key
+    .replace(/-----BEGIN PRIVATE KEY-----/g, "")
+    .replace(/-----END PRIVATE KEY-----/g, "")
+    .replace(/\s/g, "");
+
+  const keyDer = Uint8Array.from(atob(pemBody), (c) => c.charCodeAt(0));
+  const cryptoKey = await crypto.subtle.importKey(
+    "pkcs8",
+    keyDer,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+
+  const signatureBuffer = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    cryptoKey,
+    new TextEncoder().encode(signingInput),
+  );
+
+  const signature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)))
+    .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+
+  const jwt = `${signingInput}.${signature}`;
+
+  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: jwt,
+    }),
+  });
+
+  if (!tokenRes.ok) {
+    const errText = await tokenRes.text();
+    throw new Error(`Failed to obtain Google access token: ${tokenRes.status} ${errText}`);
+  }
+
+  const tokenData = await tokenRes.json();
+  return tokenData.access_token as string;
 }
 
 // ---------------------------------------------------------------------------
@@ -66,7 +136,8 @@ const RESPONSE_SCHEMA = {
   required: ["sectors"],
 };
 
-const SYSTEM_PROMPT = `You are a market analyst. Analyze the following companies and group them into natural market clusters.
+const SYSTEM_PROMPT =
+  `You are a market analyst. Analyze the following companies and group them into natural market clusters.
 Return ONLY strict JSON. No explanation, no markdown.
 Generate 5 to 8 sectors. Each sector must have 2 to 5 subsectors.
 Every company must belong to exactly one subsector.
@@ -118,9 +189,7 @@ async function callGeminiWithRetry(
     if (!response.ok) {
       if (RETRYABLE_STATUSES.has(response.status) && attempt < maxAttempts - 1) {
         lastError = new Error(`Gemini API returned ${response.status}, retrying`);
-        console.error(
-          `[classify-landscape] ${lastError.message} (attempt ${attempt + 1}/${maxAttempts})`,
-        );
+        console.error(`[classify-landscape] ${lastError.message} (attempt ${attempt + 1}/${maxAttempts})`);
         continue;
       }
       const errorText = await response.text();
@@ -132,8 +201,6 @@ async function callGeminiWithRetry(
     if (!text) throw new Error("No text content in Gemini response");
 
     const parsed = JSON.parse(text);
-
-    // Flatten sectors → subsectors → companies into flat mapping
     const mapping: ClassificationResult[] = [];
     for (const s of parsed.sectors ?? []) {
       for (const sub of s.subsectors ?? []) {
@@ -171,7 +238,9 @@ Deno.serve(async (req: Request) => {
     if (!googleCredentials) throw new Error("GOOGLE_CREDENTIALS is not set");
     if (!googleProject) throw new Error("GOOGLE_CLOUD_PROJECT is not set");
 
-    const token = await getGoogleAccessToken(JSON.parse(googleCredentials));
+    const token = await getGoogleAccessToken(googleCredentials, [
+      "https://www.googleapis.com/auth/cloud-platform",
+    ]);
 
     const classification = await callGeminiWithRetry(
       token,
