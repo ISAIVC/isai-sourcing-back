@@ -26,3 +26,6 @@ enable_signup = true
 [storage]
 enabled = true
 file_size_limit = "50MiB"
+
+[functions.classify-landscape]
+max_duration_seconds = 400
