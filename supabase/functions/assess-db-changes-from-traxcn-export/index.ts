@@ -31,52 +31,63 @@ function extractDomainsFromCompaniesSheet(fileBuffer: ArrayBuffer): string[] {
     throw new Error("No sheet starting with 'Companies' found in the file");
   }
 
-  // Second pass: parse only the Companies sheet to stay within CPU limits.
+  // Second pass: parse only the Companies sheet.
+  // Disable styles/formulas/HTML — we only need raw cell values (saves memory).
   const workbook = XLSX.read(data, {
     type: "array",
     sheets: companiesSheetName,
+    cellStyles: false,
+    cellFormula: false,
+    cellHTML: false,
+    cellDates: false,
+    raw: true,
   });
 
   const sheet = workbook.Sheets[companiesSheetName];
 
-  // Tracxn exports use `<dimension ref="A1"/>` (incorrect metadata), which causes
-  // SheetJS to set sheet['!ref'] = "A1" and sheet_to_json to only see one cell.
-  // Fix: recompute !ref from the actual cell keys present in the sheet object.
+  // Fix broken dimension ref (Tracxn exports use <dimension ref="A1"/>).
+  // Recompute !ref from actual cell keys to know the real extent of the sheet.
   const cellKeys = Object.keys(sheet).filter((k) => !k.startsWith("!"));
+  let maxR = 0, maxC = 0;
+  for (const k of cellKeys) {
+    try {
+      const addr = XLSX.utils.decode_cell(k);
+      if (addr.r > maxR) maxR = addr.r;
+      if (addr.c > maxC) maxC = addr.c;
+    } catch (_) { /* skip non-cell keys */ }
+  }
   if (cellKeys.length > 0) {
-    let maxR = 0, maxC = 0;
-    for (const k of cellKeys) {
-      try {
-        const addr = XLSX.utils.decode_cell(k);
-        if (addr.r > maxR) maxR = addr.r;
-        if (addr.c > maxC) maxC = addr.c;
-      } catch (_) { /* skip non-cell keys */ }
-    }
-    sheet["!ref"] = XLSX.utils.encode_range(
-      { r: 0, c: 0 },
-      { r: maxR, c: maxC },
-    );
+    sheet["!ref"] = XLSX.utils.encode_range({ r: 0, c: 0 }, { r: maxR, c: maxC });
   }
 
-  // Detect the header row dynamically — Tracxn occasionally adds metadata rows
-  // (e.g. "Prepared on …") that shift the header down from its expected position.
-  const rawRows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-  const headerRowIdx = rawRows.findIndex(
-    (row) => Array.isArray(row) && row.includes("Domain Name")
-  );
-  if (headerRowIdx === -1) {
+  // Find header row + domain column by direct cell scanning.
+  // Avoids sheet_to_json which duplicates the entire sheet in memory.
+  // Tracxn occasionally adds metadata lines that shift the header row down.
+  let headerRowIdx = -1;
+  let domainColIdx = -1;
+  outer: for (let r = 0; r <= Math.min(maxR, 20); r++) {
+    for (let c = 0; c <= Math.min(maxC, 30); c++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r, c })];
+      if (cell?.v === "Domain Name") {
+        headerRowIdx = r;
+        domainColIdx = c;
+        break outer;
+      }
+    }
+  }
+
+  if (headerRowIdx === -1 || domainColIdx === -1) {
     throw new Error("Could not find a header row containing 'Domain Name'");
   }
 
-  const rows: Record<string, string>[] = XLSX.utils.sheet_to_json(sheet, {
-    range: headerRowIdx,
-  });
-
-  const domains = rows
-    .map((row) => row["Domain Name"])
-    .filter((domain): domain is string =>
-      typeof domain === "string" && domain.trim() !== ""
-    );
+  // Extract only the domain column via direct cell access.
+  const domains: string[] = [];
+  for (let r = headerRowIdx + 1; r <= maxR; r++) {
+    const cell = sheet[XLSX.utils.encode_cell({ r, c: domainColIdx })];
+    if (cell && typeof cell.v === "string" && cell.v.trim()) {
+      domains.push(cell.v.trim());
+    }
+  }
 
   return [...new Set(domains)];
 }
