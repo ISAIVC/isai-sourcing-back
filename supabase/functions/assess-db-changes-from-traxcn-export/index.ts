@@ -158,7 +158,8 @@ Deno.serve(async (req: Request) => {
     const { data: existingRecords, error: queryError } = await supabase
       .from("traxcn_companies")
       .select("domain_name")
-      .in("domain_name", domains);
+      .in("domain_name", domains)
+      .limit(2000);
 
     if (queryError) {
       throw new Error(
