@@ -58,9 +58,18 @@ function extractDomainsFromCompaniesSheet(fileBuffer: ArrayBuffer): string[] {
     );
   }
 
-  // Row index 5 (6th row) is the header, matching Python's pd.read_excel(header=5)
+  // Detect the header row dynamically — Tracxn occasionally adds metadata rows
+  // (e.g. "Prepared on …") that shift the header down from its expected position.
+  const rawRows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+  const headerRowIdx = rawRows.findIndex(
+    (row) => Array.isArray(row) && row.includes("Domain Name")
+  );
+  if (headerRowIdx === -1) {
+    throw new Error("Could not find a header row containing 'Domain Name'");
+  }
+
   const rows: Record<string, string>[] = XLSX.utils.sheet_to_json(sheet, {
-    range: 5,
+    range: headerRowIdx,
   });
 
   const domains = rows
