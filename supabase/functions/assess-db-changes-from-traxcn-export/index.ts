@@ -155,21 +155,29 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { data: existingRecords, error: queryError } = await supabase
-      .from("traxcn_companies")
-      .select("domain_name")
-      .in("domain_name", domains)
-      .limit(2000);
+    // Query in batches: a single .in() with all domains builds one GET request
+    // whose URL exceeds the length limit and fails at the network layer.
+    const BATCH_SIZE = 100;
+    const existingDomains = new Set<string>();
 
-    if (queryError) {
-      throw new Error(
-        `Failed to query existing domains: ${queryError.message}`
-      );
+    for (let i = 0; i < domains.length; i += BATCH_SIZE) {
+      const batch = domains.slice(i, i + BATCH_SIZE);
+      const { data: existingRecords, error: queryError } = await supabase
+        .from("traxcn_companies")
+        .select("domain_name")
+        .in("domain_name", batch);
+
+      if (queryError) {
+        throw new Error(
+          `Failed to query existing domains: ${queryError.message}`
+        );
+      }
+
+      for (const r of existingRecords as { domain_name: string }[]) {
+        existingDomains.add(r.domain_name);
+      }
     }
 
-    const existingDomains = new Set(
-      existingRecords.map((r: { domain_name: string }) => r.domain_name)
-    );
     const newDomains = domains.filter((d) => !existingDomains.has(d));
 
     console.log(
