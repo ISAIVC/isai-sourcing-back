@@ -487,7 +487,7 @@ function buildFilterValuesSection(filterValues: {
 // ---------------------------------------------------------------------------
 
 const RETRYABLE_STATUSES = new Set([408, 429, 500, 503, 504]);
-const GEMINI_MODEL = "gemini-3-pro-preview";
+const GEMINI_MODEL = "gemini-3.1-flash-lite-preview";
 
 async function callGeminiWithRetry(
   token: string,
@@ -587,7 +587,7 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const googleCredentials = Deno.env.get("GOOGLE_CREDENTIALS");
     const googleProject = Deno.env.get("GOOGLE_CLOUD_PROJECT");
-    const googleLocation = Deno.env.get("GOOGLE_CLOUD_LOCATION") ?? "global";
+    const googleLocation = Deno.env.get("GOOGLE_CLOUD_LOCATION") ?? "us-central1";
     const searchResourcesBucket = Deno.env.get("SEARCH_RESOURCES_BUCKET_NAME");
 
     if (!googleCredentials) {
