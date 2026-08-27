@@ -111,6 +111,11 @@ BEGIN
     RETURN;
   END IF;
 
+  -- An HNSW scan only walks hnsw.ef_search candidates (default 40), so the
+  -- over-fetch below would be silently capped at 40 rows. Raise it to match,
+  -- transaction-locally (third argument = is_local).
+  PERFORM set_config('hnsw.ef_search', GREATEST(p_limit * 5, 200)::text, true);
+
   RETURN QUERY
   WITH neighbours AS (
     -- Over-fetch: the similarity floor and the join to sourcing_mv both drop
