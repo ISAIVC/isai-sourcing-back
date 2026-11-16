@@ -34,3 +34,16 @@ create policy "Allow all for authenticated"
   to authenticated
   using (true)
   with check (true);
+
+-- ---------------------------------------------------------------------------
+-- Sub-folders: a folder can sit inside another one (nested tree).
+-- on delete set null: deleting a parent re-parents nothing automatically at the
+-- DB level (children become top-level); the front moves them up one level first.
+-- Idempotent.
+-- ---------------------------------------------------------------------------
+alter table public.list_folders
+  add column if not exists parent_id uuid
+  references public.list_folders(id) on delete set null;
+
+create index if not exists list_folders_parent_id_idx
+  on public.list_folders (parent_id);
