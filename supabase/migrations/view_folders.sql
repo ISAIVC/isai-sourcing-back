@@ -53,3 +53,15 @@ values
   ('bbbbbbbb-0000-4000-8000-000000000001', 'BY',  'team', 1),
   ('bbbbbbbb-0000-4000-8000-000000000002', 'CAP', 'team', 2)
 on conflict (id) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- Sub-folders (16/11/2026): a view folder can sit inside another one.
+-- on delete set null at DB level; the front moves contents up one level first.
+-- Idempotent.
+-- ---------------------------------------------------------------------------
+alter table public.view_folders
+  add column if not exists parent_id uuid
+  references public.view_folders(id) on delete set null;
+
+create index if not exists view_folders_parent_id_idx
+  on public.view_folders (parent_id);
